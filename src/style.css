@@ -1,0 +1,305 @@
+/* Fiadito Web Application – global styles (colors and spacing taken from the Figma mockups) */
+:root {
+    --fi-bg: #f1f5f9;
+    --fi-card: #ffffff;
+    --fi-surface: #f1f5fb;
+    --fi-line: #e2e8f0;
+    --fi-text: #0f1b3d;
+    --fi-muted: #475569;
+    --fi-soft: #94a3b8;
+    --fi-primary: #0d6efd;
+    --fi-primary-soft: #e3edff;
+    --fi-primary-surface: #eaf2ff;
+    --fi-ok: #16a34a;
+    --fi-ok-soft: #dcfce7;
+    --fi-warn: #b45309;
+    --fi-warn-soft: #fef3c7;
+    --fi-bad: #e11d48;
+    --fi-bad-soft: #ffe4e6;
+    --fi-violet: #7c3aed;
+    --fi-violet-soft: #ede9fe;
+    --fi-radius: 14px;
+    --fi-shadow: 0 1px 2px rgba(15, 27, 61, .04), 0 2px 10px rgba(15, 27, 61, .04);
+    --fi-font: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    --fi-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+    --sidebar-width: 250px;
+    font-family: var(--fi-font);
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--fi-text);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: var(--fi-bg);
+    color: var(--fi-text);
+    font-family: var(--fi-font);
+    -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+    margin: 0;
+    color: var(--fi-text);
+    letter-spacing: -.01em;
+}
+
+h1 {
+    font-size: clamp(1.7rem, 2.6vw, 2.3rem);
+    font-weight: 800;
+}
+
+h2 {
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+
+a {
+    color: var(--fi-primary);
+}
+
+/* ---------- Cards and sections ---------- */
+.fi-card {
+    background: var(--fi-card);
+    border: 1px solid var(--fi-line);
+    border-radius: var(--fi-radius);
+    box-shadow: var(--fi-shadow);
+    padding: 1.4rem 1.5rem;
+}
+
+.fi-card + .fi-card {
+    margin-top: 1.25rem;
+}
+
+.fi-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.fi-muted {
+    color: var(--fi-muted);
+}
+
+.fi-soft {
+    color: var(--fi-soft);
+    font-size: .85rem;
+}
+
+.fi-mono {
+    font-family: var(--fi-mono);
+}
+
+.fi-money {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.fi-grid {
+    display: grid;
+    gap: 1rem;
+}
+
+.fi-grid--2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.fi-grid--3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.fi-grid--4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.fi-grid--5 {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+@media (max-width: 1100px) {
+    .fi-grid--4, .fi-grid--5 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 720px) {
+    .fi-grid--2, .fi-grid--3, .fi-grid--4, .fi-grid--5 {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* ---------- Forms ---------- */
+.fi-field {
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+    min-width: 0;
+}
+
+.fi-field > label, .fi-label {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    font-weight: 600;
+    font-size: .9rem;
+    color: var(--fi-text);
+}
+
+.fi-required {
+    color: var(--fi-bad);
+}
+
+.fi-hint {
+    font-size: .78rem;
+    color: var(--fi-soft);
+}
+
+.fi-field .p-inputtext, .fi-field .p-select, .fi-field .p-inputnumber, .fi-field .p-datepicker, .fi-field .p-password {
+    width: 100%;
+}
+
+.fi-section {
+    border: 1px solid var(--fi-line);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.fi-section + .fi-section {
+    margin-top: 1rem;
+}
+
+.fi-section__title {
+    margin: 0;
+    padding: .6rem 1rem;
+    background: var(--fi-primary-surface);
+    color: var(--fi-primary);
+    font-size: .98rem;
+    font-weight: 700;
+}
+
+.fi-section__body {
+    padding: 1rem;
+}
+
+/* ---------- Badges ---------- */
+.fi-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .2rem .7rem;
+    border-radius: 999px;
+    font-size: .78rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.fi-badge--ok {
+    background: var(--fi-ok-soft);
+    color: #15803d;
+}
+
+.fi-badge--warn {
+    background: var(--fi-warn-soft);
+    color: var(--fi-warn);
+}
+
+.fi-badge--bad {
+    background: var(--fi-bad-soft);
+    color: var(--fi-bad);
+}
+
+.fi-badge--info {
+    background: var(--fi-primary-soft);
+    color: var(--fi-primary);
+}
+
+.fi-badge--violet {
+    background: var(--fi-violet-soft);
+    color: var(--fi-violet);
+}
+
+.fi-badge--muted {
+    background: #e2e8f0;
+    color: var(--fi-muted);
+}
+
+/* ---------- Tables ---------- */
+.p-datatable .p-datatable-thead > tr > th {
+    background: var(--fi-surface);
+    color: var(--fi-text);
+    font-size: .85rem;
+    font-weight: 600;
+}
+
+.p-datatable .p-datatable-tbody > tr > td {
+    font-size: .9rem;
+}
+
+.fi-table-number {
+    text-align: right;
+}
+
+/* ---------- Empty states ---------- */
+.fi-empty {
+    display: grid;
+    place-items: center;
+    gap: .3rem;
+    padding: 2rem 1rem;
+    text-align: center;
+    color: var(--fi-muted);
+}
+
+.fi-empty i {
+    font-size: 1.8rem;
+    color: var(--fi-soft);
+}
+
+/* ---------- Summary box (blue panels of the mockups) ---------- */
+.fi-summary {
+    background: var(--fi-primary-surface);
+    border: 1px solid #cfe0ff;
+    border-radius: 12px;
+    padding: 1.1rem 1.25rem;
+}
+
+.fi-summary dl {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: .45rem 1rem;
+    margin: 0;
+}
+
+.fi-summary dt {
+    color: var(--fi-muted);
+}
+
+.fi-summary dd {
+    margin: 0;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.fi-summary .fi-summary__total {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--fi-text);
+    border-top: 1px solid #cfe0ff;
+    padding-top: .5rem;
+}
+
+.fi-formula {
+    font-family: var(--fi-mono);
+    font-size: .78rem;
+    color: var(--fi-muted);
+}
+
+:focus-visible {
+    outline: 2px solid var(--fi-primary);
+    outline-offset: 2px;
+}
