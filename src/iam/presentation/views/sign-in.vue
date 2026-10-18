@@ -45,6 +45,7 @@ const submit = async () => {
       </div>
 
       <pv-message v-if="route.query.registered" severity="success" :closable="false">Cuenta creada. Ya puedes iniciar sesión.</pv-message>
+      <pv-message v-if="route.query.expired" severity="warn" :closable="false">Tu sesión expiró. Vuelve a iniciar sesión.</pv-message>
       <pv-message v-if="error" severity="error" :closable="false" role="alert">{{ error }}</pv-message>
 
       <div class="fi-field">

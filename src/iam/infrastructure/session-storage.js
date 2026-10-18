@@ -1,20 +1,23 @@
 const sessionKey = 'fiadito.session';
 
 /**
- * Infrastructure helper that persists the signed-in user in the browser.
+ * Infrastructure helper that persists the session (JWT token and user) in the browser.
  *
  * @remarks
  * Storage access is wrapped in try/catch because it can be unavailable
  * (private mode, blocked site data). In that case the session only lives in memory.
  */
+let memorySession = null;
+
 export const sessionStorageService = {
 
     /**
      * Saves the session.
      *
-     * @param {Object} session - Serializable user data.
+     * @param {{token: string, usuario: Object}} session - Token and user returned by POST /auth/login.
      */
     save(session) {
+        memorySession = session;
         try {
             localStorage.setItem(sessionKey, JSON.stringify(session));
         } catch (error) {
@@ -25,19 +28,27 @@ export const sessionStorageService = {
     /**
      * Reads the stored session.
      *
-     * @returns {Object|null} The stored session, if any.
+     * @returns {{token: string, usuario: Object}|null}
      */
     load() {
+        if (memorySession) return memorySession;
         try {
             const value = localStorage.getItem(sessionKey);
-            return value ? JSON.parse(value) : null;
+            memorySession = value ? JSON.parse(value) : null;
+            return memorySession;
         } catch (error) {
             return null;
         }
     },
 
+    /** @returns {string|null} The JWT of the current session. */
+    token() {
+        return this.load()?.token ?? null;
+    },
+
     /** Removes the stored session. */
     clear() {
+        memorySession = null;
         try {
             localStorage.removeItem(sessionKey);
         } catch (error) {
