@@ -1,8 +1,6 @@
 import {reactive} from 'vue';
 import {ProductApi} from '@/catalog/infrastructure/product-api.js';
 import {ProductAssembler} from '@/catalog/infrastructure/product.assembler.js';
-import {iamStore} from '@/iam/application/iam.store.js';
-import {domainEventBus, DomainEvents} from '@/shared/application/domain-event-bus.js';
 
 const productApi = new ProductApi();
 
@@ -14,14 +12,11 @@ export const catalogStore = reactive({
     products: [],
     loading: false,
 
-    /**
-     * @param {number} businessId
-     * @returns {Promise<void>}
-     */
-    async load(businessId) {
+    /** @returns {Promise<void>} */
+    async load() {
         this.loading = true;
         try {
-            this.products = ProductAssembler.toEntities(await productApi.getByBusiness(businessId));
+            this.products = ProductAssembler.toEntities(await productApi.getAll());
         } finally {
             this.loading = false;
         }
@@ -46,13 +41,10 @@ export const catalogStore = reactive({
         if (errors.length) throw errors[0];
         const resource = ProductAssembler.toResource(product);
         if (product.id === null) {
-            const saved = ProductAssembler.toEntity((await productApi.create(resource)).data);
-            this.products.push(saved);
-            domainEventBus.publish(DomainEvents.PRODUCT_REGISTERED, iamStore.auditContext({recordId: saved.id, detail: `Registro del producto ${saved.description}`}));
+            this.products.push(ProductAssembler.toEntity((await productApi.create(resource)).data));
         } else {
             const saved = ProductAssembler.toEntity((await productApi.update(product.id, resource)).data);
             this.products.splice(this.products.findIndex(item => item.id === saved.id), 1, saved);
-            domainEventBus.publish(DomainEvents.PRODUCT_EDITED, iamStore.auditContext({recordId: saved.id, detail: `Edición del producto ${saved.description}`}));
         }
     },
 
@@ -63,11 +55,7 @@ export const catalogStore = reactive({
      * @returns {Promise<void>}
      */
     async toggleStatus(product) {
-        const status = product.isActive ? 'INACTIVO' : 'ACTIVO';
-        await productApi.patch(product.id, {estado: status});
-        product.status = status;
-        domainEventBus.publish(DomainEvents.PRODUCT_STATUS_CHANGED, iamStore.auditContext({
-            recordId: product.id, detail: `${status === 'INACTIVO' ? 'Baja' : 'Reactivación'} del producto ${product.description}`
-        }));
+        const saved = ProductAssembler.toEntity((await productApi.changeStatus(product.id, product.isActive ? 'INACTIVO' : 'ACTIVO')).data);
+        this.products.splice(this.products.findIndex(item => item.id === saved.id), 1, saved);
     }
 });

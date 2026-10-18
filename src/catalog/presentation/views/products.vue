@@ -3,7 +3,6 @@ import {computed, onMounted, ref} from 'vue';
 import {useToast} from 'primevue/usetoast';
 import {useConfirm} from 'primevue/useconfirm';
 import {catalogStore} from '@/catalog/application/catalog.store.js';
-import {iamStore} from '@/iam/application/iam.store.js';
 import {saleModeLabels} from '@/catalog/domain/model/sale-mode.js';
 import {useFormatting} from '@/shared/presentation/composables/use-formatting.js';
 import PageHeader from '@/shared/presentation/components/page-header.vue';
@@ -51,7 +50,7 @@ const toggleStatus = product => {
   });
 };
 
-onMounted(() => catalogStore.load(iamStore.currentUser.businessId)
+onMounted(() => catalogStore.load()
     .catch(message => toast.add({severity: 'error', summary: 'No se pudieron cargar los productos', detail: String(message), life: 6000})));
 </script>
 
