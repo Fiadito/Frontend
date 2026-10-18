@@ -13,7 +13,6 @@ import {
     InputNumber, InputText, Message, Password, Select, SelectButton, Tag, Toast, Tooltip
 } from 'primevue';
 import {iamStore} from '@/iam/application/iam.store.js';
-import {registerAuditEventHandlers} from '@/audit/application/audit-event-handlers.js';
 
 /**
  * Fiadito theme: Aura preset with the blue of the Figma mockups (#0D6EFD) as primary color.
@@ -30,7 +29,6 @@ const FiaditoPreset = definePreset(Aura, {
 const primeUiLicenseKey = import.meta.env.VITE_PRIME_UI_LICENSE_KEY;
 
 iamStore.restoreSession();
-registerAuditEventHandlers();
 
 createApp(App)
     .use(router)

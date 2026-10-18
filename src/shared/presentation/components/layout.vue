@@ -31,8 +31,8 @@ const isActive = item => route.name === item.to.name || (item.to.name === 'membe
 const today = systemClock.today().format();
 
 /** CerrarSesion. */
-const signOut = () => {
-  iamStore.signOut();
+const signOut = async () => {
+  await iamStore.signOut();
   router.push({name: 'sign-in'});
 };
 
