@@ -1,15 +1,7 @@
 <script setup>
 import {computed, onMounted, ref, watch} from 'vue';
-import {membershipStore} from '@/membership/application/membership.store.js';
-import {catalogStore} from '@/catalog/application/catalog.store.js';
+import {useToast} from 'primevue/usetoast';
 import {billingStore} from '@/billing/application/billing.store.js';
-import {iamStore} from '@/iam/application/iam.store.js';
-import {useBusinessData} from '@/dashboard/application/use-business-data.js';
-import {CutoffReport} from '@/billing/domain/model/cutoff-report.js';
-import {PaymentCalendar} from '@/credit/domain/model/payment-calendar.js';
-import {CalendarDate} from '@/shared/domain/model/calendar-date.js';
-import {systemClock} from '@/shared/domain/model/system-clock.js';
-import {domainEventBus, DomainEvents} from '@/shared/application/domain-event-bus.js';
 import {useFormatting} from '@/shared/presentation/composables/use-formatting.js';
 import PageHeader from '@/shared/presentation/components/page-header.vue';
 import StatCard from '@/shared/presentation/components/stat-card.vue';
@@ -18,31 +10,41 @@ import FieldHelp from '@/shared/presentation/components/field-help.vue';
 
 /**
  * Reporte de corte (Figura 9, module 7.8): per member, the single-payment purchases and the
- * installments due on the payment date that follows the cut-off, the amount to pay and the deadline.
+ * installments due on the payment date that follows the cut-off (GET /reportes/corte).
  */
+const toast = useToast();
 const {formatMoney, formatDate, formatDateTime} = useFormatting();
-const {loading, reload} = useBusinessData();
-const today = systemClock.today();
 
-const cutoffOptions = PaymentCalendar.cutoffsAround(today).map(date => ({
-  label: `${date.format()} → paga ${PaymentCalendar.paymentDateOfCutoff(date).format()}`, value: date.toIsoString()
-}));
-const selected = ref(PaymentCalendar.currentCutoff(today).toIsoString());
+const options = ref([]);
+const selected = ref(null);
+const report = ref(null);
+const loading = ref(false);
 
-const report = computed(() => new CutoffReport(CalendarDate.from(selected.value), billingStore.obligations, membershipStore.members));
-const productName = id => {
-  const product = catalogStore.findById(id);
-  return product ? `${product.brand} ${product.description}` : `Producto ${id}`;
+const cutoffOptions = computed(() => options.value.map(option => ({
+  label: `${formatDate(option.fechaCorte)} → paga ${formatDate(option.fechaPago)}`, value: option.fechaCorte
+})));
+const groups = computed(() => report.value?.grupos ?? []);
+
+const load = async () => {
+  if (!selected.value) return;
+  loading.value = true;
+  try {
+    report.value = await billingStore.cutoffReport(selected.value);
+  } catch (message) {
+    toast.add({severity: 'error', summary: 'No se pudo generar el reporte', detail: String(message), life: 6000});
+  } finally {
+    loading.value = false;
+  }
 };
 
-const recordConsultation = () => domainEventBus.publish(DomainEvents.CUTOFF_REPORT_GENERATED, iamStore.auditContext({
-  detail: `Reporte de corte del ${CalendarDate.from(selected.value).format()}`
-}));
-
-watch(selected, recordConsultation);
+watch(selected, load);
 onMounted(async () => {
-  await reload();
-  recordConsultation();
+  try {
+    options.value = await billingStore.cutoffOptions();
+    selected.value = options.value.find(option => option.actual)?.fechaCorte ?? options.value[0]?.fechaCorte ?? null;
+  } catch (message) {
+    toast.add({severity: 'error', summary: 'No se pudieron cargar los cortes', detail: String(message), life: 6000});
+  }
 });
 </script>
 
@@ -53,7 +55,7 @@ onMounted(async () => {
       <span class="deadline__icon"><i class="pi pi-calendar"></i></span>
       <div>
         <p>Paga hasta el</p>
-        <strong>{{ formatDate(report.paymentDate) }}</strong>
+        <strong>{{ report ? formatDate(report.fechaPago) : '—' }}</strong>
         <small>Después se cobra interés moratorio por día de atraso.</small>
       </div>
     </div>
@@ -64,61 +66,61 @@ onMounted(async () => {
       <label for="cutoff">Fecha de corte <field-help text="Los cortes son los días 10 y 25 a las 23:59. El corte del 10 se paga el 15 y el del 25, el 30 (o el último día del mes)."/></label>
       <pv-select input-id="cutoff" v-model="selected" :options="cutoffOptions" option-label="label" option-value="value"/>
     </div>
-    <span v-if="report.isPreliminary(today)" class="fi-badge fi-badge--warn"><i class="pi pi-info-circle"></i>Corte aún abierto: reporte preliminar</span>
+    <span v-if="report?.preliminar" class="fi-badge fi-badge--warn"><i class="pi pi-info-circle"></i>Corte aún abierto: reporte preliminar</span>
   </section>
 
   <div class="fi-grid fi-grid--3 stats">
-    <stat-card icon="pi pi-calendar" label="Fecha de corte" :value="formatDate(report.cutoffDate)" note="Hasta las 23:59"/>
-    <stat-card icon="pi pi-file" label="Total del corte" :value="formatMoney(report.total)" value-tone="primary"/>
-    <stat-card icon="pi pi-users" label="Socios / ítems en el corte" :value="`${report.groups.length} / ${report.itemCount}`" note="Compras a pago único y cuotas"/>
+    <stat-card icon="pi pi-calendar" label="Fecha de corte" :value="report ? formatDate(report.fechaCorte) : '—'" note="Hasta las 23:59"/>
+    <stat-card icon="pi pi-file" label="Total del corte" :value="formatMoney(report?.total ?? 0)" value-tone="primary"/>
+    <stat-card icon="pi pi-users" label="Socios / ítems en el corte" :value="`${groups.length} / ${report?.cantidadItems ?? 0}`" note="Compras a pago único y cuotas"/>
   </div>
 
   <section class="fi-card">
     <h2 class="mb">Detalle por socio</h2>
     <div v-if="loading" class="fi-empty"><i class="pi pi-spin pi-spinner"></i></div>
-    <div v-else-if="report.groups.length === 0" class="fi-empty">
-      <i class="pi pi-inbox"></i><strong>No hay pagos en este corte</strong><span>Ninguna compra ni cuota vence el {{ formatDate(report.paymentDate) }}.</span>
+    <div v-else-if="groups.length === 0" class="fi-empty">
+      <i class="pi pi-inbox"></i><strong>No hay pagos en este corte</strong><span>Ninguna compra ni cuota vence el {{ report ? formatDate(report.fechaPago) : '—' }}.</span>
     </div>
-    <article v-for="group in report.groups" :key="group.member.id" class="group">
+    <article v-for="group in groups" :key="group.idSocio" class="group">
       <header class="group__header">
         <div>
-          <strong>{{ group.member.fullName }}</strong>
-          <span class="fi-soft"> · DNI {{ group.member.dni }}</span>
+          <strong>{{ group.nombres }}</strong>
+          <span class="fi-soft"> · DNI {{ group.dni }}</span>
         </div>
-        <span>Total a pagar: <strong class="fi-money">{{ formatMoney(group.total, group.member.currency) }}</strong></span>
+        <span>Total a pagar: <strong class="fi-money">{{ formatMoney(group.total, group.moneda) }}</strong></span>
       </header>
-      <pv-data-table :value="group.items" data-key="key" size="small" scrollable>
+      <pv-data-table :value="group.items" data-key="clave" size="small" scrollable>
         <pv-column header="Fecha de compra">
-          <template #body="{ data }">{{ formatDateTime(data.sale.purchaseDateTime) }}</template>
+          <template #body="{ data }">{{ formatDateTime(data.fechaHoraCompra) }}</template>
         </pv-column>
         <pv-column header="Producto">
-          <template #body="{ data }">{{ productName(data.sale.productId) }} <span class="fi-soft">× {{ data.sale.quantity }}</span></template>
+          <template #body="{ data }">{{ data.producto }} <span class="fi-soft">× {{ data.cantidad }}</span></template>
         </pv-column>
         <pv-column header="Concepto">
-          <template #body="{ data }">{{ data.label }}</template>
+          <template #body="{ data }">{{ data.concepto }}</template>
         </pv-column>
         <pv-column header="Monto de la compra" body-class="fi-table-number" header-class="fi-table-number">
-          <template #body="{ data }"><span class="fi-money">{{ formatMoney(data.sale.amount, group.member.currency) }}</span></template>
+          <template #body="{ data }"><span class="fi-money">{{ formatMoney(data.montoCompra, group.moneda) }}</span></template>
         </pv-column>
         <pv-column header="A pagar" body-class="fi-table-number" header-class="fi-table-number">
-          <template #body="{ data }"><strong class="fi-money">{{ formatMoney(data.amount, group.member.currency) }}</strong></template>
+          <template #body="{ data }"><strong class="fi-money">{{ formatMoney(data.monto, group.moneda) }}</strong></template>
         </pv-column>
         <pv-column header="Estado">
-          <template #body="{ data }"><status-badge :status="data.statusOn(today)"/></template>
+          <template #body="{ data }"><status-badge :status="data.estado"/></template>
         </pv-column>
       </pv-data-table>
     </article>
 
-    <div v-if="report.groups.length" class="total">
+    <div v-if="groups.length" class="total">
       <span class="total__icon"><i class="pi pi-database"></i></span>
       <div>
         <p>Total a pagar en este corte</p>
         <strong>{{ formatMoney(report.total) }}</strong>
       </div>
       <dl>
-        <template v-for="group in report.groups" :key="group.member.id">
-          <dt>{{ group.member.fullName }} ({{ group.items.length }} ítem{{ group.items.length === 1 ? '' : 's' }})</dt>
-          <dd class="fi-money">{{ formatMoney(group.total, group.member.currency) }}</dd>
+        <template v-for="group in groups" :key="group.idSocio">
+          <dt>{{ group.nombres }} ({{ group.items.length }} ítem{{ group.items.length === 1 ? '' : 's' }})</dt>
+          <dd class="fi-money">{{ formatMoney(group.total, group.moneda) }}</dd>
         </template>
         <dt class="total__sum">Total del corte</dt>
         <dd class="total__sum fi-money">{{ formatMoney(report.total) }}</dd>
