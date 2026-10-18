@@ -3,14 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Fiadito: control de fiados y créditos en cuotas para negocios (SI642 Finanzas e Ingeniería Económica, UPC).",
+  "description": "Fiadito: control de fiados y créditos en cuotas para negocios (SI642 Finanzas e Ingeniería Económica, UPC). Frontend del backend Spring Boot.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "fake-api": "json-server server/db.json --routes server/routes.json --port 3000",
-    "seed": "node scripts/build-seed.mjs",
-    "test:finance": "node scripts/verify-finance.mjs"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@primeuix/themes": "^3.0.1",
@@ -24,7 +21,6 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.9",
-    "json-server": "^0.17.4",
     "vite": "^8.3.1"
   },
   "engines": {
