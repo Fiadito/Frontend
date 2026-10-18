@@ -5,8 +5,6 @@ import {useToast} from 'primevue/usetoast';
 import {membershipStore} from '@/membership/application/membership.store.js';
 import {catalogStore} from '@/catalog/application/catalog.store.js';
 import {creditStore} from '@/credit/application/credit.store.js';
-import {billingStore} from '@/billing/application/billing.store.js';
-import {useBusinessData} from '@/dashboard/application/use-business-data.js';
 import {allowsMode, SaleMode} from '@/catalog/domain/model/sale-mode.js';
 import {CreditPolicy} from '@/credit/domain/model/credit-policy.js';
 import {systemClock} from '@/shared/domain/model/system-clock.js';
@@ -17,13 +15,13 @@ import ScheduleTable from '@/credit/presentation/components/schedule-table.vue';
 
 /**
  * Registrar venta (Figura 8, module 7.6): member, product, quantity, date-time and payment mode
- * (single payment or up to 8 fortnightly installments). Shows the amount and the payment plan
- * before saving the operation.
+ * (single payment or up to 8 fortnightly installments). The backend simulates the sale
+ * (POST /ventas/simulacion) and shows the amount and the payment plan before saving it.
  */
 const router = useRouter();
 const toast = useToast();
 const {formatMoney, formatDate} = useFormatting();
-const {loading, reload} = useBusinessData();
+const loading = ref(false);
 
 /** "YYYY-MM-DDTHH:mm" ⇄ Date for the date picker. */
 const toLocalText = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}T${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
@@ -32,6 +30,8 @@ const fromLocalText = text => new Date(Number(text.slice(0, 4)), Number(text.sli
 const form = reactive({memberId: null, productId: null, quantity: 1, purchaseDate: fromLocalText(systemClock.nowLocal()), paymentMode: SaleMode.INSTALLMENTS, installmentCount: 8});
 const saving = ref(false);
 const attempted = ref(false);
+const simulation = ref(null);
+const simulating = ref(false);
 const maxDate = (() => {
   const today = systemClock.today();
   return new Date(today.year, today.month - 1, today.day, 23, 59);
@@ -39,10 +39,9 @@ const maxDate = (() => {
 
 const activeMembers = computed(() => membershipStore.members.filter(member => member.isActive));
 const activeProducts = computed(() => catalogStore.products.filter(product => product.isActive)
-    .map(product => ({...product, displayName: product.displayName, listPrice: product.listPrice})));
+    .map(product => ({id: product.id, displayName: product.displayName, listPrice: product.listPrice})));
 const member = computed(() => membershipStore.findById(form.memberId) ?? null);
 const product = computed(() => catalogStore.findById(form.productId) ?? null);
-const statement = computed(() => (member.value ? billingStore.statementOf(member.value) : null));
 const currency = computed(() => member.value?.currency ?? 'PEN');
 
 const modeOptions = computed(() => [
@@ -59,13 +58,37 @@ watch(member, value => {
   if (value) form.installmentCount = Math.min(form.installmentCount || 8, value.maxInstallments);
 });
 
-const simulation = computed(() => creditStore.simulate({
-  member: member.value, product: product.value, quantity: form.quantity ?? 0,
-  purchaseDateTime: form.purchaseDate ? toLocalText(form.purchaseDate) : '', paymentMode: form.paymentMode,
-  installmentCount: form.installmentCount ?? 0, memberCapitalDebt: statement.value?.capitalDebt ?? 0
+const request = computed(() => ({
+  memberId: form.memberId, productId: form.productId, quantity: form.quantity ?? 0,
+  purchaseDateTime: form.purchaseDate ? toLocalText(form.purchaseDate) : null, paymentMode: form.paymentMode,
+  installmentCount: form.installmentCount ?? 0
 }));
-const sale = computed(() => simulation.value.sale);
-const hasSelection = computed(() => member.value && product.value);
+const hasSelection = computed(() => Boolean(member.value && product.value));
+
+let timer = null;
+let sequence = 0;
+const simulate = () => {
+  clearTimeout(timer);
+  if (!hasSelection.value) {
+    simulation.value = null;
+    return;
+  }
+  timer = setTimeout(async () => {
+    const current = ++sequence;
+    simulating.value = true;
+    try {
+      const result = await creditStore.simulate(request.value);
+      if (current === sequence) simulation.value = result;
+    } catch (message) {
+      if (current === sequence) simulation.value = {errors: [String(message)], schedule: []};
+    } finally {
+      if (current === sequence) simulating.value = false;
+    }
+  }, 250);
+};
+watch(request, simulate, {deep: true});
+
+const errors = computed(() => simulation.value?.errors ?? []);
 
 const resetForm = () => {
   Object.assign(form, {productId: null, quantity: 1, purchaseDate: fromLocalText(systemClock.nowLocal())});
@@ -74,11 +97,12 @@ const resetForm = () => {
 
 const register = async () => {
   attempted.value = true;
-  if (simulation.value.errors.length) return;
+  if (!hasSelection.value || errors.value.length) return;
   saving.value = true;
   try {
-    const saved = await creditStore.register(simulation.value, product.value.description, member.value.fullName);
-    toast.add({severity: 'success', summary: 'Venta registrada', detail: `${member.value.fullName}: ${formatMoney(saved.amount, currency.value)} – primer pago ${formatDate(saved.paymentDate)}`, life: 5000});
+    const saved = await creditStore.register(request.value);
+    toast.add({severity: 'success', summary: 'Venta registrada', detail: `${saved.memberName}: ${formatMoney(saved.amount, currency.value)} – primer pago ${formatDate(saved.paymentDate)}`, life: 5000});
+    await membershipStore.load();
     resetForm();
   } catch (message) {
     toast.add({severity: 'error', summary: 'No se registró la venta', detail: String(message), life: 6000});
@@ -87,7 +111,16 @@ const register = async () => {
   }
 };
 
-onMounted(reload);
+onMounted(async () => {
+  loading.value = true;
+  try {
+    await Promise.all([membershipStore.load(), catalogStore.load()]);
+  } catch (message) {
+    toast.add({severity: 'error', summary: 'No se pudieron cargar los datos', detail: String(message), life: 6000});
+  } finally {
+    loading.value = false;
+  }
+});
 </script>
 
 <template>
@@ -144,32 +177,32 @@ onMounted(reload);
         </div>
         <div class="calc">
           <span>Monto de la compra</span>
-          <strong>{{ sale ? formatMoney(sale.amount, currency) : '—' }}</strong>
+          <strong>{{ simulation?.amount != null ? formatMoney(simulation.amount, currency) : '—' }}</strong>
           <small>Precio de lista × cantidad</small>
         </div>
         <div class="calc">
           <span>Fecha de pago asignada</span>
-          <strong>{{ sale ? formatDate(sale.paymentDate) : '—' }}</strong>
-          <small>{{ simulation.cutoffDate ? `Corte del ${formatDate(simulation.cutoffDate)}` : 'Según el corte' }}</small>
+          <strong>{{ simulation?.paymentDate ? formatDate(simulation.paymentDate) : '—' }}</strong>
+          <small>{{ simulation?.cutoffDate ? `Corte del ${formatDate(simulation.cutoffDate)}` : 'Según el corte' }}</small>
         </div>
         <div class="calc">
           <span>{{ form.paymentMode === SaleMode.INSTALLMENTS ? 'Cuota quincenal' : 'Monto a pagar (S = C)' }}</span>
-          <strong>{{ sale ? formatMoney(sale.installmentAmount, currency) : '—' }}</strong>
+          <strong>{{ simulation?.installmentAmount != null ? formatMoney(simulation.installmentAmount, currency) : '—' }}</strong>
           <small>{{ form.paymentMode === SaleMode.INSTALLMENTS ? `C = P / ${form.installmentCount || 'n'}` : 'Pago único' }}</small>
         </div>
         <div class="calc">
           <span>Crédito disponible</span>
-          <strong :class="{ 'calc--bad': statement && sale && sale.amount > statement.availableCredit }">{{ statement ? formatMoney(statement.availableCredit, currency) : '—' }}</strong>
+          <strong :class="{ 'calc--bad': member && simulation?.amount > member.availableCredit }">{{ member ? formatMoney(member.availableCredit, currency) : '—' }}</strong>
           <small>{{ member ? `Límite ${formatMoney(member.creditLimit, currency)}` : 'Selecciona un socio' }}</small>
         </div>
       </div>
 
-      <pv-message v-if="hasSelection && simulation.errors.length && (attempted || sale)" severity="warn" :closable="false" class="mt" role="alert">
+      <pv-message v-if="hasSelection && errors.length" severity="warn" :closable="false" class="mt" role="alert">
         <ul class="errors">
-          <li v-for="error in simulation.errors" :key="error">{{ error }}</li>
+          <li v-for="error in errors" :key="error">{{ error }}</li>
         </ul>
       </pv-message>
-      <pv-message v-else-if="attempted && simulation.errors.length" severity="warn" :closable="false" class="mt">{{ simulation.errors[0] }}</pv-message>
+      <pv-message v-else-if="attempted && !hasSelection" severity="warn" :closable="false" class="mt">Selecciona un socio y un producto.</pv-message>
     </section>
 
     <section v-if="form.paymentMode === SaleMode.INSTALLMENTS" class="fi-card">
@@ -177,13 +210,13 @@ onMounted(reload);
         <h2>Plan de pagos</h2>
         <span class="fi-soft">Cuotas quincenales iguales · vencen los días 15 y 30 (o último día del mes)</span>
       </div>
-      <schedule-table v-if="simulation.schedule.length" :rows="simulation.schedule" :total="sale?.totalToPay ?? null" :currency="currency"/>
+      <schedule-table v-if="simulation?.schedule?.length" :rows="simulation.schedule" :total="simulation.totalToPay ?? null" :currency="currency"/>
       <div v-else class="fi-empty"><i class="pi pi-calendar"></i><span>Selecciona socio, producto y cantidad para ver el plan de pagos.</span></div>
     </section>
 
     <div class="footer-actions">
       <pv-button type="button" label="Cancelar" severity="secondary" outlined @click="router.push({ name: 'panel' })"/>
-      <pv-button type="submit" label="Registrar venta" icon="pi pi-check" :loading="saving" :disabled="!hasSelection"/>
+      <pv-button type="submit" label="Registrar venta" icon="pi pi-check" :loading="saving" :disabled="!hasSelection || simulating"/>
     </div>
   </form>
 </template>
