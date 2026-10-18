@@ -19,10 +19,15 @@ export class Member {
      * @param {number} [props.creditLimit=1000]
      * @param {number} [props.maxInstallments=8]
      * @param {string} [props.status='ACTIVO']
+     * @param {string} [props.email] - Email of the member account (read only).
+     * @param {number} [props.debt] - Pending capital debt (computed by the backend).
+     * @param {number} [props.availableCredit] - Credit limit − debt (computed by the backend).
+     * @param {boolean} [props.overdue] - True when an obligation is overdue.
      */
     constructor({id = null, businessId, dni = '', fullName = '', phone = '', address = '', currency = 'PEN',
                     lateRatePeriod = CreditPolicy.DEFAULT_LATE_RATE_PERIOD, lateRateValue = CreditPolicy.DEFAULT_LATE_RATE,
-                    creditLimit = CreditPolicy.DEFAULT_CREDIT_LIMIT, maxInstallments = CreditPolicy.MAX_INSTALLMENTS, status = 'ACTIVO'}) {
+                    creditLimit = CreditPolicy.DEFAULT_CREDIT_LIMIT, maxInstallments = CreditPolicy.MAX_INSTALLMENTS, status = 'ACTIVO',
+                    email = '', debt = 0, availableCredit = null, overdue = false}) {
         this.id = id;
         this.businessId = businessId;
         this.dni = dni;
@@ -35,6 +40,10 @@ export class Member {
         this.creditLimit = creditLimit;
         this.maxInstallments = maxInstallments;
         this.status = status;
+        this.email = email;
+        this.debt = debt;
+        this.availableCredit = availableCredit ?? creditLimit;
+        this.overdue = overdue;
     }
 
     /** @returns {boolean} */

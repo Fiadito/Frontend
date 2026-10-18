@@ -1,8 +1,6 @@
 import {BaseApi} from '@/shared/infrastructure/base-api.js';
 import {BaseEndpoint} from '@/shared/infrastructure/base-endpoint.js';
 
-const membersPath = import.meta.env.VITE_MEMBERS_ENDPOINT_PATH;
-
 /**
  * RESTful client of the Membership context (/socios).
  */
@@ -11,12 +9,12 @@ export class MemberApi extends BaseApi {
 
     constructor() {
         super();
-        this.#members = new BaseEndpoint(this, membersPath);
+        this.#members = new BaseEndpoint(this, '/socios');
     }
 
-    /** @param {number} businessId */
-    getByBusiness(businessId) {
-        return this.#members.getAll({idNegocio: businessId});
+    /** @returns {Promise<import('axios').AxiosResponse>} Members of the business with debt, available credit and late status. */
+    getAll() {
+        return this.#members.getAll();
     }
 
     /** @param {number} id */
@@ -24,7 +22,7 @@ export class MemberApi extends BaseApi {
         return this.#members.getById(id);
     }
 
-    /** @param {Object} resource */
+    /** @param {Object} resource - Includes correo and clave to create the member account. */
     create(resource) {
         return this.#members.create(resource);
     }
@@ -34,8 +32,8 @@ export class MemberApi extends BaseApi {
         return this.#members.update(id, resource);
     }
 
-    /** @param {number} id @param {Object} changes */
-    patch(id, changes) {
-        return this.#members.patch(id, changes);
+    /** @param {number} id @param {string} status - ACTIVO or INACTIVO. */
+    changeStatus(id, status) {
+        return this.http.patch(`/socios/${id}/estado`, {estado: status});
     }
 }

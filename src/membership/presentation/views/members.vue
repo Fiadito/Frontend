@@ -4,8 +4,6 @@ import {useRouter} from 'vue-router';
 import {useToast} from 'primevue/usetoast';
 import {useConfirm} from 'primevue/useconfirm';
 import {membershipStore} from '@/membership/application/membership.store.js';
-import {billingStore} from '@/billing/application/billing.store.js';
-import {useBusinessData} from '@/dashboard/application/use-business-data.js';
 import {useFormatting} from '@/shared/presentation/composables/use-formatting.js';
 import {RatePeriod} from '@/shared/domain/model/effective-rate.js';
 import PageHeader from '@/shared/presentation/components/page-header.vue';
@@ -20,7 +18,7 @@ const router = useRouter();
 const toast = useToast();
 const confirm = useConfirm();
 const {formatMoney, formatRate} = useFormatting();
-const {loading, reload} = useBusinessData();
+const loading = ref(false);
 
 const search = ref('');
 const statusFilter = ref('TODOS');
@@ -28,10 +26,9 @@ const statusOptions = [{label: 'Todos', value: 'TODOS'}, {label: 'Activos', valu
 const dialogVisible = ref(false);
 const editing = ref(null);
 
-const rows = computed(() => membershipStore.members.map(member => {
-  const statement = billingStore.statementOf(member);
-  return {member, capitalDebt: statement.capitalDebt, available: statement.availableCredit, overdue: statement.isOverdue};
-}));
+const rows = computed(() => membershipStore.members.map(member => ({
+  member, capitalDebt: member.debt, available: member.availableCredit, overdue: member.overdue
+})));
 
 const filtered = computed(() => {
   const term = search.value.trim().toLowerCase();
@@ -64,13 +61,24 @@ const toggleStatus = row => {
     rejectProps: {label: 'Cancelar', severity: 'secondary', text: true},
     accept: async () => {
       try {
-        await membershipStore.toggleStatus(row.member, row.capitalDebt);
+        await membershipStore.toggleStatus(row.member);
         toast.add({severity: 'success', summary: deactivating ? 'Socio dado de baja.' : 'Socio reactivado.', life: 3000});
       } catch (message) {
         toast.add({severity: 'error', summary: 'No se pudo cambiar el estado', detail: String(message), life: 5000});
       }
     }
   });
+};
+
+const reload = async () => {
+  loading.value = true;
+  try {
+    await membershipStore.load();
+  } catch (message) {
+    toast.add({severity: 'error', summary: 'No se pudieron cargar los socios', detail: String(message), life: 6000});
+  } finally {
+    loading.value = false;
+  }
 };
 
 onMounted(reload);

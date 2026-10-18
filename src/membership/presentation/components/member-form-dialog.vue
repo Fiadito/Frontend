@@ -25,7 +25,7 @@ const error = ref('');
 const saving = ref(false);
 const isNew = computed(() => !props.member);
 
-watch(() => props.visible, async visible => {
+watch(() => props.visible, visible => {
   if (!visible) return;
   error.value = '';
   Object.assign(form, blank());
@@ -35,7 +35,7 @@ watch(() => props.visible, async visible => {
       dni: m.dni, fullName: m.fullName, phone: m.phone, address: m.address, currency: m.currency, lateRatePeriod: m.lateRatePeriod,
       lateRatePercent: Number((m.lateRateValue * 100).toFixed(7)), creditLimit: m.creditLimit, maxInstallments: m.maxInstallments
     });
-    form.email = await iamStore.memberEmail(m.id).catch(() => '');
+    form.email = m.email;
   }
 });
 
