@@ -2,7 +2,9 @@ import {SaleMode} from '@/catalog/domain/model/sale-mode.js';
 import {CreditPolicy} from '@/credit/domain/model/credit-policy.js';
 
 /** Units of measure offered in the product form. */
-export const productUnits = Object.freeze(['Unidad', 'Botella', 'Lata', 'Frasco', 'Bolsa', 'Barra', 'Pote', 'Kit', 'Servicio', 'Mes']);
+/** Las bebidas baratas se venden por paquete (no sueltas); los suplementos por pote o bolsa. El campo también acepta texto libre. */
+export const productUnits = Object.freeze(['Unidad', 'Pote', 'Bolsa', 'Paquete x6', 'Paquete x12', 'Paquete x15', 'Pack x4', 'Pack x6',
+    'Pack x12', 'Caja x10', 'Caja x12', 'Kit', 'Servicio', 'Mes']);
 
 /** Kind of catalog item: a single product or a combo of products with a fixed price (S/ 100, 200 or 400). */
 export const ProductType = Object.freeze({PRODUCT: 'PRODUCTO', COMBO: 'COMBO'});
@@ -60,7 +62,7 @@ export class Product {
         return this.type === ProductType.COMBO;
     }
 
-    /** @returns {string} Name shown in selects, e.g. "X-B · Bebida energizante sabor Piña (Botella)" or "Combo Hidratación … (Combo)". */
+    /** @returns {string} Name shown in selects, e.g. "Optimum Nutrition · Creatina monohidratada micronizada 600 g (Pote)" or "Combo Hidratación … (Combo)". */
     get displayName() {
         return this.isCombo ? `${this.description} (Combo)` : `${this.brand} · ${this.description} (${this.unit})`;
     }

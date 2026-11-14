@@ -65,7 +65,7 @@ src/
 
 ## Casos de prueba (Tabla 12)
 
-- **CP07**: Registrar venta a *Carla Mendoza*, 100 × X-B Piña, fecha 05/10/2026, 8 cuotas, TEA 20 % → cuota S/ 64.66
+- **CP07**: Registrar venta a *Carla Mendoza*, 2 × ON Creatina 600 g (S/ 250 c/u), fecha 05/10/2026, 8 cuotas, TEA 20 % → cuota S/ 64.66
   (interés total S/ 17.32) del 15/10/2026 al 30/01/2027.
 - **CP08**: Reporte de corte del 25/10/2026 → cuota 2 de Luis y de Carla a pagar el 30/10/2026.
 - **CP09**: Registrar pago de la cuota 2 de *Luis Ramírez* con fecha 04/11/2026 → vencida 5 días; con TEA 60 % la mora es S/ 0.42
