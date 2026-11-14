@@ -3,9 +3,12 @@
 Frontend de **Fiadito** (SI642 Finanzas e Ingeniería Económica – UPC): control de fiados de un negocio (Fuerza Norte Gym) con
 ventas a pago único o en cuotas quincenales iguales, reporte de corte, interés moratorio y estado de cuenta del socio.
 
-**Vue 3 + PrimeVue 5 + Vue Router + Axios**, conectado al backend **Spring Boot** (repositorio `Fiadito/Backend`) en
-`http://localhost:8080/api/v1`. El inicio de sesión devuelve un **JWT** que se envía en cada petición
-(`Authorization: Bearer <token>`).
+**Vue 3 + PrimeVue 5 + Vue Router + Axios**, conectado al backend **Spring Boot** (repositorio `Fiadito/Backend`). La
+dirección de la API se toma de `VITE_FIADITO_API_URL`: `http://localhost:8080/api/v1` en desarrollo (`.env.development`) y
+la del backend publicado en producción (`.env.production`). El inicio de sesión devuelve un **JWT** que se envía en cada
+petición (`Authorization: Bearer <token>`).
+
+**Versión publicada:** https://fiadito-upc.web.app (Firebase Hosting)
 
 ## Cómo ejecutarlo (WebStorm)
 
@@ -24,6 +27,26 @@ npm run dev      # http://localhost:5173
 
 Si usan licencia de PrimeUI, pongan `VITE_PRIME_UI_LICENSE_KEY` en un archivo `.env.local` (no se sube a Git).
 
+## Publicar en Firebase Hosting
+
+El proyecto ya está enlazado a Firebase (`fiadito-upc`, ver `.firebaserc` y `firebase.json`; la carpeta pública es `dist`
+y está configurado como *single-page app*). Para publicar una nueva versión:
+
+1. En `.env.production`, `VITE_FIADITO_API_URL` debe apuntar al backend publicado (por ejemplo
+   `https://<servicio>.onrender.com/api/v1`), no a `localhost`.
+2. En el backend publicado, `CORS_ALLOWED_ORIGINS` debe incluir `https://fiadito-upc.web.app`.
+3. Compila y publica:
+
+```bash
+npm install -g firebase-tools   # solo la primera vez
+firebase login                  # solo la primera vez
+npm run build
+firebase deploy
+```
+
+El plan gratuito (Spark) no pide tarjeta y sus límites son por proyecto. El backend gratuito de Render se apaga tras
+15 minutos sin uso: ábrelo un minuto antes de presentar para que despierte.
+
 ## Qué hace cada lado
 
 - **Backend:** valida y calcula todo (fecha de pago según el corte, plan francés con la TEQ de la venta, TED, interés moratorio,
@@ -38,6 +61,8 @@ Si usan licencia de PrimeUI, pongan `VITE_PRIME_UI_LICENSE_KEY` en un archivo `.
 - **Plan de pagos con interés** (columna *Interés*, método francés) y **botón “Plan de pagos”** en Socios, Panel, Registrar venta y Registrar pago.
 - **Tasa moratoria solo si está vencido**: aparece en *Registrar pago* cuando la fecha real pasa el vencimiento (TEA 60 % por defecto).
 - **Combos** de S/ 100, 200 y 400 en *Productos*; en *Registrar venta* aparecen primero y hay un botón *Usar mínimo* para llegar a S/ 400.
+- **Catálogo con productos reales**: las bebidas de S/ 2–5 se venden por paquete (*Paquete x12*, *Pack x6*…), con proteínas,
+  creatinas y pre entrenos de hasta S/ 679, y tres combos de S/ 400.
 - **Conversión quincenal → diaria corregida**: las tasas se guardan con 7 decimales en porcentaje y los rangos se validan sobre la TEA equivalente.
 - No se puede registrar dos veces la misma venta o pago con doble clic / doble Enter, ni un pago con fecha futura.
 
