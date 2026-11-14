@@ -11,38 +11,49 @@ import {systemClock} from '@/shared/domain/model/system-clock.js';
 import {useFormatting} from '@/shared/presentation/composables/use-formatting.js';
 import PageHeader from '@/shared/presentation/components/page-header.vue';
 import FieldHelp from '@/shared/presentation/components/field-help.vue';
+import RateField from '@/shared/presentation/components/rate-field.vue';
+import RateConversion from '@/shared/presentation/components/rate-conversion.vue';
 import ScheduleTable from '@/credit/presentation/components/schedule-table.vue';
+import PaymentPlanDialog from '@/credit/presentation/components/payment-plan-dialog.vue';
 
 /**
- * Registrar venta (Figura 8, module 7.6): member, product, quantity, date-time and payment mode
- * (single payment or up to 8 fortnightly installments). The backend simulates the sale
- * (POST /ventas/simulacion) and shows the amount and the payment plan before saving it.
+ * Registrar venta (Figura 8, module 7.6): member, product or combo, quantity, date-time, payment mode
+ * (single payment or up to 8 fortnightly installments) and the effective rate of the sale (equivalent TEA 15 %–27 %).
+ * The backend simulates the sale (POST /ventas/simulacion) and shows the amount, the interest and the French plan before saving it.
  */
 const router = useRouter();
 const toast = useToast();
-const {formatMoney, formatDate} = useFormatting();
+const {formatMoney, formatDate, formatRate} = useFormatting();
 const loading = ref(false);
 
 /** "YYYY-MM-DDTHH:mm" ⇄ Date for the date picker. */
 const toLocalText = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}T${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 const fromLocalText = text => new Date(Number(text.slice(0, 4)), Number(text.slice(5, 7)) - 1, Number(text.slice(8, 10)), Number(text.slice(11, 13)), Number(text.slice(14, 16)));
 
-const form = reactive({memberId: null, productId: null, quantity: 1, purchaseDate: fromLocalText(systemClock.nowLocal()), paymentMode: SaleMode.INSTALLMENTS, installmentCount: 8});
+const form = reactive({
+  memberId: null, productId: null, quantity: 1, purchaseDate: fromLocalText(systemClock.nowLocal()), paymentMode: SaleMode.INSTALLMENTS,
+  installmentCount: 8, ratePeriod: CreditPolicy.DEFAULT_SALE_RATE_PERIOD, ratePercent: CreditPolicy.DEFAULT_SALE_RATE * 100
+});
 const saving = ref(false);
 const attempted = ref(false);
 const simulation = ref(null);
 const simulating = ref(false);
+const lastSale = ref(null);
+const planVisible = ref(false);
 const maxDate = (() => {
   const today = systemClock.today();
   return new Date(today.year, today.month - 1, today.day, 23, 59);
 })();
 
 const activeMembers = computed(() => membershipStore.members.filter(member => member.isActive));
+/** Combos first: they are the easy way to reach the minimum of S/ 400 with cheap drinks. */
 const activeProducts = computed(() => catalogStore.products.filter(product => product.isActive)
-    .map(product => ({id: product.id, displayName: product.displayName, listPrice: product.listPrice})));
+    .sort((a, b) => Number(b.isCombo) - Number(a.isCombo))
+    .map(product => ({id: product.id, displayName: product.displayName, listPrice: product.listPrice, isCombo: product.isCombo})));
 const member = computed(() => membershipStore.findById(form.memberId) ?? null);
 const product = computed(() => catalogStore.findById(form.productId) ?? null);
 const currency = computed(() => member.value?.currency ?? 'PEN');
+const minimumQuantity = computed(() => product.value?.minimumQuantity ?? 1);
 
 const modeOptions = computed(() => [
   {label: 'Pago único', value: SaleMode.SINGLE_PAYMENT, disabled: product.value ? !allowsMode(product.value.saleMode, SaleMode.SINGLE_PAYMENT) : false},
@@ -53,6 +64,7 @@ const maxInstallments = computed(() => member.value?.maxInstallments ?? CreditPo
 watch(product, value => {
   if (!value) return;
   if (!allowsMode(value.saleMode, form.paymentMode)) form.paymentMode = value.saleMode === SaleMode.SINGLE_PAYMENT ? SaleMode.SINGLE_PAYMENT : SaleMode.INSTALLMENTS;
+  if ((form.quantity ?? 0) * value.listPrice < CreditPolicy.MIN_AMOUNT) form.quantity = value.minimumQuantity;
 });
 watch(member, value => {
   if (value) form.installmentCount = Math.min(form.installmentCount || 8, value.maxInstallments);
@@ -61,7 +73,7 @@ watch(member, value => {
 const request = computed(() => ({
   memberId: form.memberId, productId: form.productId, quantity: form.quantity ?? 0,
   purchaseDateTime: form.purchaseDate ? toLocalText(form.purchaseDate) : null, paymentMode: form.paymentMode,
-  installmentCount: form.installmentCount ?? 0
+  installmentCount: form.installmentCount ?? 0, ratePeriod: form.ratePeriod, ratePercent: form.ratePercent
 }));
 const hasSelection = computed(() => Boolean(member.value && product.value));
 
@@ -96,11 +108,14 @@ const resetForm = () => {
 };
 
 const register = async () => {
+  // Guard against double submit (Enter twice or double click): only one request at a time.
+  if (saving.value || simulating.value) return;
   attempted.value = true;
   if (!hasSelection.value || errors.value.length) return;
   saving.value = true;
   try {
     const saved = await creditStore.register(request.value);
+    lastSale.value = saved;
     toast.add({severity: 'success', summary: 'Venta registrada', detail: `${saved.memberName}: ${formatMoney(saved.amount, currency.value)} – primer pago ${formatDate(saved.paymentDate)}`, life: 5000});
     await membershipStore.load();
     resetForm();
@@ -124,7 +139,15 @@ onMounted(async () => {
 </script>
 
 <template>
-  <page-header title="Registrar venta" subtitle="Registra una compra al fiado y revisa su plan de pago antes de guardarla."/>
+  <page-header title="Registrar venta" subtitle="Registra una compra al fiado con su tasa efectiva y revisa su plan de pagos antes de guardarla."/>
+
+  <pv-message v-if="lastSale" severity="success" :closable="true" class="mb" @close="lastSale = null">
+    <div class="last-sale">
+      <span>Venta registrada: {{ lastSale.memberName }} · {{ lastSale.productName }} × {{ lastSale.quantity }} ·
+        {{ formatMoney(lastSale.totalToPay, currency) }} con interés.</span>
+      <pv-button label="Ver plan de pagos" icon="pi pi-calendar" size="small" @click="planVisible = true"/>
+    </div>
+  </pv-message>
 
   <form novalidate @submit.prevent="register">
     <section class="fi-card">
@@ -138,24 +161,30 @@ onMounted(async () => {
           </pv-select>
         </div>
         <div class="fi-field">
-          <label for="product">Producto <span class="fi-required">*</span> <field-help text="Producto activo del catálogo. Se usa su precio de lista (crédito)."/></label>
+          <label for="product">Producto o combo <span class="fi-required">*</span> <field-help text="Producto o combo activo del catálogo. Se usa su precio de lista (crédito). Los combos de S/ 100, 200 o 400 llegan rápido al mínimo de S/ 400."/></label>
           <pv-select input-id="product" v-model="form.productId" :options="activeProducts" option-label="displayName" option-value="id" filter
-                     placeholder="Selecciona un producto" :loading="loading" empty-message="No hay productos activos">
+                     placeholder="Selecciona un producto o combo" :loading="loading" empty-message="No hay productos activos">
             <template #option="{ option }">
+              <span v-if="option.isCombo" class="fi-badge combo-tag">Combo</span>
               <span>{{ option.displayName }}</span><span class="fi-soft"> · {{ formatMoney(option.listPrice) }}</span>
             </template>
           </pv-select>
         </div>
         <div class="fi-field">
-          <label for="quantity">Cantidad <span class="fi-required">*</span> <field-help text="Unidades compradas (≥ 1). Precio de lista × cantidad debe estar entre S/ 400.00 y S/ 1,000.00."/></label>
+          <label for="quantity">Cantidad <span class="fi-required">*</span> <field-help text="Unidades o combos comprados. Precio de lista × cantidad debe estar entre S/ 400.00 y S/ 1,000.00."/></label>
           <pv-input-number input-id="quantity" v-model="form.quantity" show-buttons :min="1" :max="999"/>
+          <small v-if="product" class="fi-hint">
+            Mínimo para llegar a S/ 400: {{ minimumQuantity }} {{ product.isCombo ? 'combo(s)' : 'unidad(es)' }}
+            <pv-button v-if="form.quantity !== minimumQuantity" type="button" label="Usar mínimo" text size="small" class="hint-button"
+                       @click="form.quantity = minimumQuantity"/>
+          </small>
         </div>
         <div class="fi-field">
           <label for="purchaseDate">Fecha y hora de compra <span class="fi-required">*</span> <field-help text="No puede ser futura. Hasta el día 10 o 25 a las 23:59 la compra entra al corte de ese día."/></label>
           <pv-date-picker input-id="purchaseDate" v-model="form.purchaseDate" show-time hour-format="24" date-format="dd/mm/yy" :max-date="maxDate" show-icon/>
         </div>
         <div class="fi-field">
-          <span class="fi-label">Modalidad de pago <span class="fi-required">*</span> <field-help text="Pago único en la fecha de pago, o cuotas quincenales iguales (sin interés compensatorio)."/></span>
+          <span class="fi-label">Modalidad de pago <span class="fi-required">*</span> <field-help text="Pago único en la fecha de pago (con una quincena de interés), o cuotas quincenales fijas con interés (método francés)."/></span>
           <pv-select-button v-model="form.paymentMode" :options="modeOptions" option-label="label" option-value="value" option-disabled="disabled" :allow-empty="false"/>
         </div>
         <div class="fi-field">
@@ -168,17 +197,25 @@ onMounted(async () => {
     </section>
 
     <section class="fi-card">
+      <h2 class="mb">Tasa efectiva de la venta</h2>
+      <div class="fi-grid fi-grid--2 rate">
+        <div>
+          <rate-field id-prefix="sale-rate" v-model:period="form.ratePeriod" v-model:percent="form.ratePercent"
+                      help="Tasa del interés del plan de pagos. Se elige en cada venta (puede ser TEA, TES, TET, TEM o TEQ) y se puede cambiar después desde el plan de pagos."
+                      hint="Su TEA equivalente debe estar entre 15 % y 27 %. Cada cuota usa su TEQ."/>
+          <p class="fi-muted note">La tasa moratoria no se pacta aquí: se coloca al registrar el pago, solo si la cuota está vencida.</p>
+        </div>
+        <rate-conversion title="Conversión de la tasa de la venta" :period="form.ratePeriod" :value="form.ratePercent === null ? null : form.ratePercent / 100"/>
+      </div>
+    </section>
+
+    <section class="fi-card">
       <h2 class="mb">Cálculo de la venta</h2>
       <div class="fi-grid fi-grid--5">
         <div class="calc">
-          <span>Precio de lista</span>
-          <strong>{{ product ? formatMoney(product.listPrice, currency) : '—' }}</strong>
-          <small>Por unidad</small>
-        </div>
-        <div class="calc">
           <span>Monto de la compra</span>
           <strong>{{ simulation?.amount != null ? formatMoney(simulation.amount, currency) : '—' }}</strong>
-          <small>Precio de lista × cantidad</small>
+          <small>{{ product ? `${formatMoney(product.listPrice, currency)} × ${form.quantity ?? 0}` : 'Precio de lista × cantidad' }}</small>
         </div>
         <div class="calc">
           <span>Fecha de pago asignada</span>
@@ -186,9 +223,14 @@ onMounted(async () => {
           <small>{{ simulation?.cutoffDate ? `Corte del ${formatDate(simulation.cutoffDate)}` : 'Según el corte' }}</small>
         </div>
         <div class="calc">
-          <span>{{ form.paymentMode === SaleMode.INSTALLMENTS ? 'Cuota quincenal' : 'Monto a pagar (S = C)' }}</span>
+          <span>{{ form.paymentMode === SaleMode.INSTALLMENTS ? 'Cuota quincenal' : 'Pago único' }}</span>
           <strong>{{ simulation?.installmentAmount != null ? formatMoney(simulation.installmentAmount, currency) : '—' }}</strong>
-          <small>{{ form.paymentMode === SaleMode.INSTALLMENTS ? `C = P / ${form.installmentCount || 'n'}` : 'Pago único' }}</small>
+          <small>{{ simulation?.periodRate != null ? `TEQ ${formatRate(simulation.periodRate)}` : 'C = P · i / (1 − (1 + i)^−n)' }}</small>
+        </div>
+        <div class="calc">
+          <span>Interés total</span>
+          <strong>{{ simulation?.interestTotal != null ? formatMoney(simulation.interestTotal, currency) : '—' }}</strong>
+          <small>{{ simulation?.totalToPay != null ? `Total a pagar ${formatMoney(simulation.totalToPay, currency)}` : 'Capital + interés' }}</small>
         </div>
         <div class="calc">
           <span>Crédito disponible</span>
@@ -208,17 +250,19 @@ onMounted(async () => {
     <section v-if="form.paymentMode === SaleMode.INSTALLMENTS" class="fi-card">
       <div class="fi-card__header">
         <h2>Plan de pagos</h2>
-        <span class="fi-soft">Cuotas quincenales iguales · vencen los días 15 y 30 (o último día del mes)</span>
+        <span class="fi-soft">Cuotas quincenales fijas con interés (método francés) · vencen los días 15 y 30 (o último día del mes)</span>
       </div>
       <schedule-table v-if="simulation?.schedule?.length" :rows="simulation.schedule" :total="simulation.totalToPay ?? null" :currency="currency"/>
-      <div v-else class="fi-empty"><i class="pi pi-calendar"></i><span>Selecciona socio, producto y cantidad para ver el plan de pagos.</span></div>
+      <div v-else class="fi-empty"><i class="pi pi-calendar"></i><span>Selecciona socio, producto, cantidad y tasa para ver el plan de pagos.</span></div>
     </section>
 
     <div class="footer-actions">
       <pv-button type="button" label="Cancelar" severity="secondary" outlined @click="router.push({ name: 'panel' })"/>
-      <pv-button type="submit" label="Registrar venta" icon="pi pi-check" :loading="saving" :disabled="!hasSelection || simulating"/>
+      <pv-button type="submit" label="Registrar venta" icon="pi pi-check" :loading="saving" :disabled="!hasSelection || simulating || saving"/>
     </div>
   </form>
+
+  <payment-plan-dialog v-model:visible="planVisible" :sale-id="lastSale?.id ?? null" :currency="currency"/>
 </template>
 
 <style scoped>
@@ -228,6 +272,34 @@ onMounted(async () => {
 
 .mt {
   margin-top: 1rem;
+}
+
+.note {
+  margin: .75rem 0 0;
+  font-size: .85rem;
+}
+
+.rate {
+  align-items: start;
+}
+
+.last-sale {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.combo-tag {
+  margin-right: .4rem;
+  background: var(--fi-primary-surface);
+  color: var(--fi-primary);
+}
+
+.hint-button {
+  padding: 0 .3rem;
 }
 
 .calc {

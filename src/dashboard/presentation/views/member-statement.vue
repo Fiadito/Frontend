@@ -13,7 +13,7 @@ const toast = useToast();
 const statement = ref(null);
 const loading = ref(true);
 
-onMounted(async () => {
+const load = async () => {
   try {
     statement.value = await billingStore.statement(Number(props.memberId));
   } catch (message) {
@@ -21,7 +21,9 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
-});
+};
+
+onMounted(load);
 </script>
 
 <template>
@@ -30,7 +32,7 @@ onMounted(async () => {
       <router-link :to="{ name: 'members' }" class="back"><i class="pi pi-arrow-left"></i> Socios</router-link>
     </template>
   </page-header>
-  <account-statement-view v-if="statement" :statement="statement"/>
+  <account-statement-view v-if="statement" :statement="statement" editable @changed="load"/>
   <div v-else-if="loading" class="fi-empty"><i class="pi pi-spin pi-spinner"></i></div>
   <div v-else class="fi-empty"><i class="pi pi-user"></i><strong>No se encontró el socio</strong></div>
 </template>

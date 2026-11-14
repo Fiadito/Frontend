@@ -11,12 +11,18 @@ export class BillingApi extends BaseApi {
         return this.http.get('/obligaciones', {params: status ? {estado: status} : {}});
     }
 
-    /** @param {{idVenta: number, idCuota: number|null, fechaPagoReal: string}} request */
+    /**
+     * @param {{idVenta: number, idCuota: number|null, fechaPagoReal: string, periodoTasaMora?: string, valorTasaMora?: number}} request
+     *   The late rate is only used when the obligation is overdue (TEA 60 % by default).
+     */
     quote(request) {
         return this.http.post('/pagos/cotizacion', request);
     }
 
-    /** @param {{idVenta: number, idCuota: number|null, fechaPagoReal: string, medioPago: string, montoPagado: number}} request */
+    /**
+     * @param {{idVenta: number, idCuota: number|null, fechaPagoReal: string, medioPago: string, montoPagado: number,
+     *   periodoTasaMora?: string, valorTasaMora?: number}} request
+     */
     registerPayment(request) {
         return this.http.post('/pagos', request);
     }

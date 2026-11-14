@@ -3,6 +3,11 @@ import {BillingApi} from '@/billing/infrastructure/billing-api.js';
 
 const billingApi = new BillingApi();
 
+/** @param {{period: string, percent: number}|null} lateRate @returns {Object} Late-rate fields of the request (empty if none). */
+const lateRateBody = lateRate => (lateRate && lateRate.period && lateRate.percent !== null && lateRate.percent !== undefined
+    ? {periodoTasaMora: lateRate.period, valorTasaMora: lateRate.percent / 100}
+    : {});
+
 /**
  * Application service of the Billing context (modules 7.8, 7.9 and 7.10).
  *
@@ -30,26 +35,30 @@ export const billingStore = reactive({
     },
 
     /**
-     * POST /pagos/cotizacion: days of delay, late interest, total due and imputation.
+     * POST /pagos/cotizacion: total due and imputation; if overdue, days of delay and late interest with the late rate given.
      *
      * @param {Object} obligation - Item of /obligaciones.
      * @param {string} paymentDate - "YYYY-MM-DD".
+     * @param {{period: string, percent: number}|null} [lateRate] - Only used when overdue (TEA 60 % if omitted).
      * @returns {Promise<Object>}
      */
-    async quote(obligation, paymentDate) {
-        return (await billingApi.quote({idVenta: obligation.idVenta, idCuota: obligation.idCuota, fechaPagoReal: paymentDate})).data;
+    async quote(obligation, paymentDate, lateRate = null) {
+        return (await billingApi.quote({
+            idVenta: obligation.idVenta, idCuota: obligation.idCuota, fechaPagoReal: paymentDate, ...lateRateBody(lateRate)
+        })).data;
     },
 
     /**
-     * RegistrarPago (POST /pagos): the backend rejects partial payments (CP10).
+     * RegistrarPago (POST /pagos): the backend rejects partial payments (CP10) and future dates.
      *
-     * @param {{obligation: Object, paymentDate: string, method: string, paid: number}} request
+     * @param {{obligation: Object, paymentDate: string, method: string, paid: number, lateRate: {period: string, percent: number}|null}} request
      * @returns {Promise<Object>} The saved payment.
      */
-    async registerPayment({obligation, paymentDate, method, paid}) {
+    async registerPayment({obligation, paymentDate, method, paid, lateRate = null}) {
         if (!paymentDate) throw 'Ingresa la fecha real de pago.';
         const saved = (await billingApi.registerPayment({
-            idVenta: obligation.idVenta, idCuota: obligation.idCuota, fechaPagoReal: paymentDate, medioPago: method, montoPagado: paid
+            idVenta: obligation.idVenta, idCuota: obligation.idCuota, fechaPagoReal: paymentDate, medioPago: method, montoPagado: paid,
+            ...lateRateBody(lateRate)
         })).data;
         await this.loadPayments();
         return saved;

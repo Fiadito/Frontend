@@ -2,22 +2,19 @@
 import {computed, reactive, ref, watch} from 'vue';
 import {Member} from '@/membership/domain/model/member.entity.js';
 import {CreditPolicy} from '@/credit/domain/model/credit-policy.js';
-import {ratePeriods} from '@/shared/domain/model/effective-rate.js';
 import {membershipStore} from '@/membership/application/membership.store.js';
 import {iamStore} from '@/iam/application/iam.store.js';
 import FieldHelp from '@/shared/presentation/components/field-help.vue';
-import LateRateConversion from '@/membership/presentation/components/late-rate-conversion.vue';
 
 /**
- * Registrar / Editar socio (Figura 5): personal data, effective late rate (≥ 40 %), credit
- * conditions and access of the member, with the conversion of the late rate to TED.
+ * Registrar / Editar socio (Figura 5): personal data, credit conditions and access of the member.
+ * No rates here: the effective rate is agreed in each sale and the late rate is entered when an overdue payment is registered.
  */
 const props = defineProps({visible: {type: Boolean, default: false}, member: {type: Object, default: null}});
 const emit = defineEmits(['update:visible', 'saved']);
 
 const blank = () => ({
-  dni: '', fullName: '', phone: '', address: '', currency: 'PEN', lateRatePeriod: CreditPolicy.DEFAULT_LATE_RATE_PERIOD,
-  lateRatePercent: CreditPolicy.DEFAULT_LATE_RATE * 100, creditLimit: CreditPolicy.DEFAULT_CREDIT_LIMIT,
+  dni: '', fullName: '', phone: '', address: '', currency: 'PEN', creditLimit: CreditPolicy.DEFAULT_CREDIT_LIMIT,
   maxInstallments: CreditPolicy.MAX_INSTALLMENTS, email: '', password: ''
 });
 const form = reactive(blank());
@@ -32,8 +29,8 @@ watch(() => props.visible, visible => {
   if (props.member) {
     const m = props.member;
     Object.assign(form, {
-      dni: m.dni, fullName: m.fullName, phone: m.phone, address: m.address, currency: m.currency, lateRatePeriod: m.lateRatePeriod,
-      lateRatePercent: Number((m.lateRateValue * 100).toFixed(7)), creditLimit: m.creditLimit, maxInstallments: m.maxInstallments
+      dni: m.dni, fullName: m.fullName, phone: m.phone, address: m.address, currency: m.currency, creditLimit: m.creditLimit,
+      maxInstallments: m.maxInstallments
     });
     form.email = m.email;
   }
@@ -42,14 +39,14 @@ watch(() => props.visible, visible => {
 const close = () => emit('update:visible', false);
 
 const save = async () => {
+  if (saving.value) return;
   error.value = '';
   saving.value = true;
   try {
     const member = new Member({
       id: props.member?.id ?? null, businessId: iamStore.currentUser.businessId, dni: form.dni.trim(), fullName: form.fullName,
-      phone: form.phone ?? '', address: form.address, currency: form.currency, lateRatePeriod: form.lateRatePeriod,
-      lateRateValue: form.lateRatePercent === null ? NaN : Number((form.lateRatePercent / 100).toFixed(9)),
-      creditLimit: form.creditLimit ?? NaN, maxInstallments: form.maxInstallments ?? NaN, status: props.member?.status ?? 'ACTIVO'
+      phone: form.phone ?? '', address: form.address, currency: form.currency, creditLimit: form.creditLimit ?? NaN,
+      maxInstallments: form.maxInstallments ?? NaN, status: props.member?.status ?? 'ACTIVO', debt: props.member?.debt ?? 0
     });
     await membershipStore.save(member, isNew.value && form.email ? {email: form.email, password: form.password} : null);
     emit('saved', isNew.value ? 'Socio registrado.' : 'Cambios guardados.');
@@ -94,26 +91,10 @@ const save = async () => {
         </div>
       </section>
 
-      <div class="fi-grid fi-grid--2 mt-3 rate-row">
-        <section class="fi-section">
-          <h3 class="fi-section__title">Tasa efectiva moratoria</h3>
-          <div class="fi-section__body fi-grid fi-grid--2">
-            <div class="fi-field">
-              <label for="period">Periodo de la tasa <field-help text="Periodo en que se pacta la tasa efectiva: anual, semestral, trimestral, mensual o quincenal. Solo se usan tasas efectivas."/></label>
-              <pv-select input-id="period" v-model="form.lateRatePeriod" :options="ratePeriods()" option-label="label" option-value="code"/>
-            </div>
-            <div class="fi-field">
-              <label for="rate">Tasa efectiva (%) <field-help text="Tasa efectiva moratoria pactada, mínimo 40 %. Se cobra solo por los días de atraso después de la fecha de pago."/></label>
-              <pv-input-group>
-                <pv-input-number input-id="rate" v-model="form.lateRatePercent" :min-fraction-digits="7" :max-fraction-digits="7" locale="en-US" :min="0"/>
-                <pv-input-group-addon>%</pv-input-group-addon>
-              </pv-input-group>
-              <small class="fi-hint">Mínimo 40 %. Por defecto TEA 60 %.</small>
-            </div>
-          </div>
-        </section>
-        <late-rate-conversion :period="form.lateRatePeriod" :value="form.lateRatePercent === null ? null : form.lateRatePercent / 100"/>
-      </div>
+      <pv-message severity="info" :closable="false" class="mt-3">
+        Las tasas ya no se fijan en el socio: la tasa efectiva (TEA entre 15 % y 27 %) se elige en cada venta, y la moratoria
+        se coloca al registrar el pago de algo vencido.
+      </pv-message>
 
       <section class="fi-section mt-3">
         <h3 class="fi-section__title">Condiciones del crédito</h3>
@@ -171,13 +152,5 @@ const save = async () => {
 
 .mt-3 {
   margin-top: 1rem;
-}
-
-.rate-row {
-  align-items: stretch;
-}
-
-.rate-row .fi-section + .fi-summary {
-  margin: 0;
 }
 </style>

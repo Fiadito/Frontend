@@ -22,8 +22,10 @@ const editing = ref(null);
 
 const filtered = computed(() => {
   const term = search.value.trim().toLowerCase();
-  return catalogStore.products.filter(product => !term || [product.description, product.brand, product.unit, saleModeLabels[product.saleMode]]
-      .some(text => String(text).toLowerCase().includes(term)));
+  return catalogStore.products
+      .filter(product => !term || [product.description, product.brand, product.unit, saleModeLabels[product.saleMode], product.isCombo ? 'combo' : '']
+          .some(text => String(text).toLowerCase().includes(term)))
+      .sort((a, b) => Number(b.isCombo) - Number(a.isCombo));
 });
 
 const openNew = () => {
@@ -56,8 +58,8 @@ onMounted(() => catalogStore.load()
 
 <template>
   <section class="fi-card">
-    <page-header title="Productos" subtitle="Gestiona los productos y servicios que ofreces en tu negocio.">
-      <pv-button label="Agregar producto" icon="pi pi-plus-circle" @click="openNew"/>
+    <page-header title="Productos" subtitle="Gestiona los productos, servicios y combos (S/ 100, 200 o 400) que ofreces en tu negocio.">
+      <pv-button label="Agregar producto o combo" icon="pi pi-plus-circle" @click="openNew"/>
     </page-header>
 
     <pv-icon-field class="search">
@@ -78,7 +80,14 @@ onMounted(() => catalogStore.load()
               <img v-if="data.imageUrl" :src="data.imageUrl" :alt="data.description">
               <i v-else class="pi pi-image"></i>
             </span>
-            <strong>{{ data.description }}</strong>
+            <div>
+              <strong>{{ data.description }}</strong>
+              <span v-if="data.isCombo" class="fi-badge combo-badge">Combo</span>
+              <small v-if="data.isCombo" class="combo-items">
+                {{ data.items.map(item => `${item.quantity} × ${item.productName}`).join(' · ') }}
+                <template v-if="data.contentValue !== null"> — valor {{ formatMoney(data.contentValue) }}</template>
+              </small>
+            </div>
           </div>
         </template>
       </pv-column>
@@ -147,5 +156,18 @@ onMounted(() => catalogStore.load()
 .actions {
   display: flex;
   gap: .4rem;
+}
+
+.combo-badge {
+  margin-left: .4rem;
+  background: var(--fi-primary-surface);
+  color: var(--fi-primary);
+}
+
+.combo-items {
+  display: block;
+  max-width: 420px;
+  color: var(--fi-muted);
+  font-size: .78rem;
 }
 </style>

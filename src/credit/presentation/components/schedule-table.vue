@@ -3,7 +3,7 @@ import {useFormatting} from '@/shared/presentation/composables/use-formatting.js
 import StatusBadge from '@/shared/presentation/components/status-badge.vue';
 
 /**
- * Payment plan table (Tabla 2: n_cuota, fecha_vencimiento, saldo_inicial, amortizacion, cuota, saldo_final).
+ * Payment plan table: n_cuota, fecha_vencimiento, saldo_inicial, interés, amortización, cuota, saldo_final (French method).
  */
 defineProps({
   rows: {type: Array, required: true},
@@ -23,6 +23,9 @@ const {formatMoney, formatDate} = useFormatting();
     <pv-column header="Saldo inicial" body-class="fi-table-number" header-class="fi-table-number">
       <template #body="{ data }"><span class="fi-money">{{ formatMoney(data.openingBalance, currency) }}</span></template>
     </pv-column>
+    <pv-column header="Interés" body-class="fi-table-number" header-class="fi-table-number">
+      <template #body="{ data }"><span class="fi-money">{{ formatMoney(data.interest, currency) }}</span></template>
+    </pv-column>
     <pv-column header="Amortización" body-class="fi-table-number" header-class="fi-table-number">
       <template #body="{ data }"><span class="fi-money">{{ formatMoney(data.amortization, currency) }}</span></template>
     </pv-column>
@@ -36,7 +39,7 @@ const {formatMoney, formatDate} = useFormatting();
       <template #body="{ data }"><status-badge :status="data.status"/></template>
     </pv-column>
     <template v-if="total !== null" #footer>
-      <div class="total">Total a pagar: <strong class="fi-money">{{ formatMoney(total, currency) }}</strong></div>
+      <div class="total">Total a pagar (capital + interés): <strong class="fi-money">{{ formatMoney(total, currency) }}</strong></div>
     </template>
   </pv-data-table>
 </template>

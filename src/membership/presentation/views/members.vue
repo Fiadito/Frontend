@@ -5,7 +5,6 @@ import {useToast} from 'primevue/usetoast';
 import {useConfirm} from 'primevue/useconfirm';
 import {membershipStore} from '@/membership/application/membership.store.js';
 import {useFormatting} from '@/shared/presentation/composables/use-formatting.js';
-import {RatePeriod} from '@/shared/domain/model/effective-rate.js';
 import PageHeader from '@/shared/presentation/components/page-header.vue';
 import StatusBadge from '@/shared/presentation/components/status-badge.vue';
 import MemberFormDialog from '@/membership/presentation/components/member-form-dialog.vue';
@@ -17,7 +16,7 @@ import MemberFormDialog from '@/membership/presentation/components/member-form-d
 const router = useRouter();
 const toast = useToast();
 const confirm = useConfirm();
-const {formatMoney, formatRate} = useFormatting();
+const {formatMoney} = useFormatting();
 const loading = ref(false);
 
 const search = ref('');
@@ -109,9 +108,6 @@ onMounted(reload);
       </template>
       <pv-column field="member.dni" header="DNI"/>
       <pv-column field="member.fullName" header="Socio" sortable/>
-      <pv-column header="Tasa moratoria">
-        <template #body="{ data }"><span class="fi-money">{{ RatePeriod[data.member.lateRatePeriod].code }} {{ formatRate(data.member.lateRateValue) }}</span></template>
-      </pv-column>
       <pv-column header="Moneda">
         <template #body="{ data }">{{ data.member.currency === 'USD' ? 'USD (US$)' : 'PEN (S/)' }}</template>
       </pv-column>
@@ -134,8 +130,8 @@ onMounted(reload);
       <pv-column header="Acciones">
         <template #body="{ data }">
           <div class="actions">
-            <pv-button icon="pi pi-calendar" severity="info" variant="outlined" size="small" aria-label="Ver plan de pago"
-                       v-tooltip.top="'Plan de pago y estado de cuenta'" @click="router.push({ name: 'member-statement', params: { memberId: data.member.id } })"/>
+            <pv-button icon="pi pi-calendar" label="Plan de pagos" severity="info" variant="outlined" size="small" aria-label="Ver plan de pagos"
+                       v-tooltip.top="'Plan de pagos y estado de cuenta'" @click="router.push({ name: 'member-statement', params: { memberId: data.member.id } })"/>
             <pv-button icon="pi pi-pencil" severity="info" variant="outlined" size="small" aria-label="Editar socio"
                        v-tooltip.top="'Editar'" @click="openEdit(data.member)"/>
             <pv-button :icon="data.member.isActive ? 'pi pi-trash' : 'pi pi-replay'" :severity="data.member.isActive ? 'danger' : 'success'"

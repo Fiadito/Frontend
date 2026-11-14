@@ -22,13 +22,14 @@ export const ratePeriods = () => Object.values(RatePeriod);
  * as indicated by the professor).
  *
  * @remarks
- * Formula 1 of the report: TED = (1 + TEP)^(1/N) − 1, rounded to 7 decimals.
- * Effective to effective: TEP2 = (1 + TEP1)^(n2/n1) − 1.
+ * Effective to effective: TEP2 = (1 + TEP1)^(n2/n1) − 1, with 7 decimals in %. The ranges of the
+ * course (15 %–27 % for a sale, at least 40 % for the late rate) are checked on the equivalent TEA,
+ * so a TEQ or a TEM is validated exactly like a TEA. The backend applies the same rules.
  */
 export class EffectiveRate {
     /**
      * @param {string} periodCode - TEA, TES, TET, TEM or TEQ.
-     * @param {number} value - Rate as a fraction (0.60 = 60 %).
+     * @param {number} value - Rate as a fraction (0.20 = 20 %).
      * @throws {Error} If the period is unknown or the value is negative.
      */
     constructor(periodCode, value) {
@@ -49,13 +50,14 @@ export class EffectiveRate {
      * Converts the rate to an effective rate of another number of days.
      *
      * @param {number} targetDays - Days of the target period.
-     * @returns {number} The equivalent rate, rounded to 7 decimals.
+     * @returns {number} The equivalent rate, rounded to 7 decimals in %.
      */
     toDays(targetDays) {
+        if (targetDays === this.days) return roundRate(this.value);
         return roundRate(Math.pow(1 + this.value, targetDays / this.days) - 1);
     }
 
-    /** @returns {number} TED: effective daily rate, rounded to 7 decimals. */
+    /** @returns {number} TED: effective daily rate. */
     toDaily() {
         return this.toDays(1);
     }
@@ -68,5 +70,22 @@ export class EffectiveRate {
      */
     toPeriod(periodCode) {
         return this.toDays(RatePeriod[periodCode].days);
+    }
+
+    /** @returns {number} Equivalent TEA. */
+    toAnnual() {
+        return this.toPeriod('TEA');
+    }
+
+    /**
+     * Is the equivalent TEA between min and max? Compared with 6 decimals so rounding does not reject a limit value.
+     *
+     * @param {number|null} min
+     * @param {number|null} max
+     * @returns {boolean}
+     */
+    annualBetween(min, max) {
+        const annual = Math.round(this.toAnnual() * 1e6) / 1e6;
+        return (min === null || annual >= min) && (max === null || annual <= max);
     }
 }

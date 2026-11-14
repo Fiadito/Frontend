@@ -7,10 +7,12 @@ import {useFormatting} from '@/shared/presentation/composables/use-formatting.js
 import PageHeader from '@/shared/presentation/components/page-header.vue';
 import StatCard from '@/shared/presentation/components/stat-card.vue';
 import StatusBadge from '@/shared/presentation/components/status-badge.vue';
+import PaymentPlanDialog from '@/credit/presentation/components/payment-plan-dialog.vue';
 
 /**
  * Panel (Figura 3): summary of the credits and the payment plan of the current credits
- * (n_cuota, fecha_vencimiento, saldo_inicial, amortizacion, cuota, saldo_final), from GET /panel.
+ * (n_cuota, fecha_vencimiento, saldo_inicial, interés, amortización, cuota, saldo_final), from GET /panel.
+ * Each row has a button that opens the full plan of its sale (where the rate of the sale can be changed).
  */
 const router = useRouter();
 const toast = useToast();
@@ -22,8 +24,14 @@ const viewOptions = [{label: 'Por cobrar', value: 'PENDIENTES'}, {label: 'Todo e
 
 const rows = computed(() => (panel.value?.plan ?? []).filter(item => view.value === 'TODAS' || item.estado !== 'PAGADA'));
 const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+const planVisible = ref(false);
+const planSaleId = ref(null);
+const openPlan = saleId => {
+  planSaleId.value = saleId;
+  planVisible.value = true;
+};
 
-onMounted(async () => {
+const load = async () => {
   loading.value = true;
   try {
     panel.value = await billingStore.panel();
@@ -32,7 +40,9 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
-});
+};
+
+onMounted(load);
 </script>
 
 <template>
@@ -73,6 +83,9 @@ onMounted(async () => {
       <pv-column header="Saldo inicial" body-class="fi-table-number" header-class="fi-table-number">
         <template #body="{ data }"><span class="fi-money">{{ formatMoney(data.saldoInicial) }}</span></template>
       </pv-column>
+      <pv-column header="Interés" body-class="fi-table-number" header-class="fi-table-number">
+        <template #body="{ data }"><span class="fi-money">{{ formatMoney(data.interes) }}</span></template>
+      </pv-column>
       <pv-column header="Amortización" body-class="fi-table-number" header-class="fi-table-number">
         <template #body="{ data }"><span class="fi-money">{{ formatMoney(data.amortizacion) }}</span></template>
       </pv-column>
@@ -85,8 +98,16 @@ onMounted(async () => {
       <pv-column header="Estado">
         <template #body="{ data }"><status-badge :status="data.estado"/></template>
       </pv-column>
+      <pv-column header="Plan">
+        <template #body="{ data }">
+          <pv-button icon="pi pi-calendar" severity="info" variant="outlined" size="small" aria-label="Ver plan de pagos"
+                     v-tooltip.top="'Ver plan de pagos de esta venta'" @click="openPlan(data.idVenta)"/>
+        </template>
+      </pv-column>
     </pv-data-table>
   </section>
+
+  <payment-plan-dialog v-model:visible="planVisible" :sale-id="planSaleId" @changed="load"/>
 </template>
 
 <style scoped>
